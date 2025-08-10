@@ -43,7 +43,6 @@ def fetch_news():
         feed = feedparser.parse(feed_url)
         for entry in feed.entries:
             thumbnail = ""
-            # Try to find image
             if "media_content" in entry and len(entry.media_content) > 0:
                 thumbnail = entry.media_content[0]["url"]
             elif "links" in entry:
@@ -63,7 +62,7 @@ def auto_refresh():
     """Fetch news every 30 minutes."""
     while True:
         fetch_news()
-        time.sleep(1800)  # 30 minutes
+        time.sleep(1800)
 
 @app.route("/")
 def index():
@@ -74,10 +73,11 @@ def index():
     conn.close()
     return render_template("index.html", articles=articles)
 
-# Run on startup (for gunicorn on Render)
+# Initialize DB and start fetching
 init_db()
 fetch_news()
 threading.Thread(target=auto_refresh, daemon=True).start()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Local run
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
