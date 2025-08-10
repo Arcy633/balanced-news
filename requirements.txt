@@ -3,3 +3,6 @@ feedparser
 gunicorn
 openai
 apscheduler
+newspaper3k
+nltk
+
