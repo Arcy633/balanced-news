@@ -9,6 +9,7 @@
         .article img { max-width: 100%; border-radius: 5px; margin-bottom: 1rem; }
         h2 { margin: 0; }
         small { color: gray; }
+        h3 { margin-top: 1rem; color: #333; }
     </style>
 </head>
 <body>
@@ -16,12 +17,17 @@
     <p><a href="/refresh">🔄 Refresh News</a></p>
     {% for news in news_items %}
     <div class="article">
-        {% if news[6] %}
-        <img src="{{ news[6] }}" alt="News Image">
+        {% if news[8] %}
+        <img src="{{ news[8] }}" alt="News Image">
         {% endif %}
         <h2>{{ news[1] }}</h2>
-        <small>{{ news[5] }} | {{ news[3] }} | {{ news[4] }}</small>
+        <small>{{ news[7] }} | {{ news[5] }} | {{ news[6] }}</small>
+        <h3>Neutral Perspective</h3>
         <p>{{ news[2] }}</p>
+        <h3>Left Perspective</h3>
+        <p>{{ news[3] }}</p>
+        <h3>Right Perspective</h3>
+        <p>{{ news[4] }}</p>
     </div>
     {% endfor %}
 </body>
