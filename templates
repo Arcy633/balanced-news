@@ -1,5 +1,0 @@
-mkdir templates
-nano templates/index.html   # or use any editor to paste HTML
-git add templates/index.html
-git commit -m "Add HTML template"
-git push
