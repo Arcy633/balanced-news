@@ -1,68 +1,56 @@
-import os
 from flask import Flask, render_template, request
-import feedparser
-from openai import OpenAI
+import requests
+import os
+import logging
 
-# Flask app
 app = Flask(__name__)
 
-# OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Enable logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# News RSS feeds
-FEEDS = {
-    "left": [
-        "https://www.theguardian.com/world/rss",
-        "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
-    ],
-    "center": [
-        "https://feeds.bbci.co.uk/news/world/rss.xml"
-    ],
-    "right": [
-        "https://www.foxnews.com/about/rss",
-        "https://www.washingtontimes.com/rss/headlines/news/world/"
-    ]
-}
-
-def rewrite_article(text):
-    """Rewrites text via GPT so it becomes unique and unbiased."""
+# Example article fetch function with timeout and error handling
+def fetch_articles(url):
     try:
-        prompt = f"Rewrite the following news content in your own words, concise and neutral. Do not mention the original site:\n\n{text}"
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a journalist who rewrites articles clearly without bias."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=250
-        )
-        return response.choices[0].message["content"].strip()
-    except Exception as e:
-        print("Rewrite failed:", e)
-        return text
+        response = requests.get(url, timeout=5)  # timeout in seconds
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout fetching data from {url}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching data from {url}: {e}")
+    return []
 
-def fetch_news(feed_urls, search_query=None):
-    """Fetch and rewrite news articles from feed URLs."""
-    articles = []
-    for url in feed_urls:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:5]:  # multiple per feed
-            if search_query and search_query.lower() not in entry.title.lower():
-                continue
-            rewritten_title = rewrite_article(entry.title)
-            rewritten_summary = rewrite_article(entry.summary)
-            articles.append({
-                "title": rewritten_title,
-                "summary": rewritten_summary,
-                "link": "#"  # Remove original link to make it your own
-            })
-    return articles
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    search_query = request.args.get("q", "").strip()
-    articles = {category: fetch_news(urls, search_query) for category, urls in FEEDS.items()}
-    return render_template("index.html", articles=articles, search_query=search_query)
+    search_query = request.form.get("search", "")
+
+    # Example API URLs (replace with your actual sources)
+    left_url = "https://example.com/left.json"
+    center_url = "https://example.com/center.json"
+    right_url = "https://example.com/right.json"
+
+    # Fetch articles
+    left_articles = fetch_articles(left_url)
+    center_articles = fetch_articles(center_url)
+    right_articles = fetch_articles(right_url)
+
+    # Filter by search query
+    if search_query:
+        left_articles = [a for a in left_articles if search_query.lower() in a["title"].lower()]
+        center_articles = [a for a in center_articles if search_query.lower() in a["title"].lower()]
+        right_articles = [a for a in right_articles if search_query.lower() in a["title"].lower()]
+
+    return render_template(
+        "index.html",
+        left_articles=left_articles,
+        center_articles=center_articles,
+        right_articles=right_articles,
+        search_query=search_query
+    )
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
