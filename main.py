@@ -4,19 +4,19 @@ import sqlite3
 import datetime
 import os
 import openai
-import re
 
 app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 DB_FILE = "news.db"
 
+# ---------- Database ----------
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS news (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
+            title TEXT UNIQUE,
             summary TEXT,
             credibility TEXT,
             category TEXT,
@@ -27,7 +27,18 @@ def init_db():
     conn.commit()
     conn.close()
 
+def article_exists(title):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id FROM news WHERE title = ?", (title,))
+    exists = c.fetchone() is not None
+    conn.close()
+    return exists
+
 def save_article(title, detailed, credibility, category, image):
+    if article_exists(title):
+        print(f"Skipping duplicate: {title}")
+        return
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
@@ -38,13 +49,13 @@ def save_article(title, detailed, credibility, category, image):
     conn.commit()
     conn.close()
 
+# ---------- AI Expansion ----------
 def expand_with_ai(title, summary):
     prompt = f"""
-    Provide the following perspectives on the news headline and summary.
-    Format your response exactly like this:
-    NEUTRAL: <text>
-    LEFT: <text>
-    RIGHT: <text>
+    Provide:
+    1. Neutral factual explanation
+    2. Left-leaning perspective
+    3. Right-leaning perspective
 
     Headline: {title}
     Summary: {summary}
@@ -55,39 +66,12 @@ def expand_with_ai(title, summary):
             messages=[{"role": "user", "content": prompt}],
             max_tokens=400
         )
-        content = resp.choices[0].message["content"].strip()
-
-        neutral, left, right = "", "", ""
-        for line in content.split("\n"):
-            if line.startswith("NEUTRAL:"):
-                neutral = line.replace("NEUTRAL:", "").strip()
-            elif line.startswith("LEFT:"):
-                left = line.replace("LEFT:", "").strip()
-            elif line.startswith("RIGHT:"):
-                right = line.replace("RIGHT:", "").strip()
-
-        return f"{neutral}|||{left}|||{right}"
+        return resp.choices[0].message["content"].strip()
     except Exception as e:
-        return "Unable to get AI output||| |||"
+        print("AI Error:", e)
+        return "AI explanation unavailable."
 
-def extract_image(entry):
-    # Try 'media_content'
-    if "media_content" in entry and entry.media_content:
-        return entry.media_content[0].get("url")
-
-    # Try 'media_thumbnail'
-    if "media_thumbnail" in entry and entry.media_thumbnail:
-        return entry.media_thumbnail[0].get("url")
-
-    # Try to find image in summary/detail HTML
-    if hasattr(entry, "summary"):
-        match = re.search(r'<img[^>]+src="([^"]+)"', entry.summary)
-        if match:
-            return match.group(1)
-
-    # No image found, use placeholder
-    return "https://via.placeholder.com/600x400?text=No+Image"
-
+# ---------- News Fetching ----------
 def fetch_and_process_news():
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
@@ -96,10 +80,19 @@ def fetch_and_process_news():
     for url in feeds:
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
-            ai_text = expand_with_ai(entry.title, entry.summary)
-            img_url = extract_image(entry)
-            save_article(entry.title, ai_text, "Verified", "Politics", img_url)
+            image_url = None
+            if 'media_content' in entry:
+                image_url = entry.media_content[0]['url']
+            elif 'links' in entry:
+                for link in entry.links:
+                    if link.type.startswith('image'):
+                        image_url = link.href
+                        break
 
+            ai_text = expand_with_ai(entry.title, entry.summary)
+            save_article(entry.title, ai_text, "Verified", "Politics", image_url)
+
+# ---------- Routes ----------
 @app.route("/")
 def index():
     conn = sqlite3.connect(DB_FILE)
@@ -107,13 +100,14 @@ def index():
     c.execute("SELECT * FROM news ORDER BY date_added DESC")
     news_items = c.fetchall()
     conn.close()
-    return render_template("index.html", news_items=news_items, current_year=datetime.datetime.now().year)
+    return render_template("index.html", news_items=news_items)
 
 @app.route("/refresh")
 def refresh():
     fetch_and_process_news()
     return redirect("/")
 
+# ---------- Main ----------
 if __name__ == "__main__":
     init_db()
     fetch_and_process_news()
