@@ -9,7 +9,6 @@ app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 DB_FILE = "news.db"
 
-# ---------- DATABASE SETUP ----------
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -38,7 +37,6 @@ def save_article(title, detailed, credibility, category, image):
     conn.commit()
     conn.close()
 
-# ---------- AI EXPANSION ----------
 def expand_with_ai(title, summary):
     prompt = f"""
     Provide:
@@ -59,7 +57,6 @@ def expand_with_ai(title, summary):
     except:
         return "AI explanation unavailable."
 
-# ---------- NEWS FETCH ----------
 def fetch_and_process_news():
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
@@ -68,10 +65,19 @@ def fetch_and_process_news():
     for url in feeds:
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
-            ai_text = expand_with_ai(entry.title, entry.summary)
-            save_article(entry.title, ai_text, "Verified", "Politics", None)
+            # Get image if available
+            image_url = None
+            if 'media_content' in entry and len(entry.media_content) > 0:
+                image_url = entry.media_content[0]['url']
+            elif 'links' in entry:
+                for link in entry.links:
+                    if link.get('type', '').startswith('image'):
+                        image_url = link['href']
+                        break
 
-# ---------- ROUTES ----------
+            ai_text = expand_with_ai(entry.title, entry.summary)
+            save_article(entry.title, ai_text, "Verified", "Politics", image_url)
+
 @app.route("/")
 def index():
     conn = sqlite3.connect(DB_FILE)
@@ -86,16 +92,8 @@ def refresh():
     fetch_and_process_news()
     return redirect("/")
 
-# ---------- STARTUP ----------
-# Always create DB when app starts
-init_db()
-
-# Fetch news once when the first request hits
-@app.before_first_request
-def startup():
-    fetch_and_process_news()
-
-# Local dev run
 if __name__ == "__main__":
+    init_db()
+    fetch_and_process_news()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
