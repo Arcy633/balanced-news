@@ -39,10 +39,11 @@ def save_article(title, detailed, credibility, category, image):
 
 def expand_with_ai(title, summary):
     prompt = f"""
-    Provide:
-    1. Neutral factual explanation
-    2. Left-leaning perspective
-    3. Right-leaning perspective
+    Provide the following perspectives on the news headline and summary.
+    Format your response exactly like this:
+    NEUTRAL: <text>
+    LEFT: <text>
+    RIGHT: <text>
 
     Headline: {title}
     Summary: {summary}
@@ -53,21 +54,21 @@ def expand_with_ai(title, summary):
             messages=[{"role": "user", "content": prompt}],
             max_tokens=400
         )
-        return resp.choices[0].message["content"].strip()
-    except:
-        return "AI explanation unavailable."
+        content = resp.choices[0].message["content"].strip()
 
-def extract_image(entry):
-    """Try to pull an image URL from RSS entry."""
-    if "media_content" in entry and len(entry.media_content) > 0:
-        return entry.media_content[0].get("url")
-    if "links" in entry:
-        for link in entry.links:
-            if link.get("type", "").startswith("image/"):
-                return link.get("href")
-    if "media_thumbnail" in entry and len(entry.media_thumbnail) > 0:
-        return entry.media_thumbnail[0].get("url")
-    return None
+        # Force consistent split
+        neutral, left, right = "", "", ""
+        for line in content.split("\n"):
+            if line.startswith("NEUTRAL:"):
+                neutral = line.replace("NEUTRAL:", "").strip()
+            elif line.startswith("LEFT:"):
+                left = line.replace("LEFT:", "").strip()
+            elif line.startswith("RIGHT:"):
+                right = line.replace("RIGHT:", "").strip()
+
+        return f"{neutral}|||{left}|||{right}"
+    except Exception as e:
+        return "Unable to get AI output||| |||"
 
 def fetch_and_process_news():
     feeds = [
@@ -77,9 +78,8 @@ def fetch_and_process_news():
     for url in feeds:
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
-            image_url = extract_image(entry)
             ai_text = expand_with_ai(entry.title, entry.summary)
-            save_article(entry.title, ai_text, "Verified", "Politics", image_url)
+            save_article(entry.title, ai_text, "Verified", "Politics", None)
 
 @app.route("/")
 def index():
@@ -88,7 +88,7 @@ def index():
     c.execute("SELECT * FROM news ORDER BY date_added DESC")
     news_items = c.fetchall()
     conn.close()
-    return render_template("index.html", news_items=news_items)
+    return render_template("index.html", news_items=news_items, current_year=datetime.datetime.now().year)
 
 @app.route("/refresh")
 def refresh():
@@ -97,16 +97,6 @@ def refresh():
 
 if __name__ == "__main__":
     init_db()
-
-    # Fetch news automatically if empty DB
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM news")
-    count = c.fetchone()[0]
-    conn.close()
-    if count == 0:
-        print("No articles found — fetching news now...")
-        fetch_and_process_news()
-
-    port = int(os.environ.get("PORT", 5000))
+    fetch_and_process_news()
+    port = int(os.environ.get("PORT", 5000))  # Render uses dynamic PORT
     app.run(host="0.0.0.0", port=port)
