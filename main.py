@@ -9,10 +9,7 @@ app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 DB_FILE = "news.db"
 
-# ------------------ DATABASE SETUP ------------------
-
 def init_db():
-    """Create the news table if it doesn't exist."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
@@ -23,44 +20,13 @@ def init_db():
             credibility TEXT,
             category TEXT,
             date_added TEXT,
-            image TEXT,
-            neutral TEXT,
-            left TEXT,
-            right TEXT
+            image TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-def migrate_db():
-    """Ensure all required columns exist (safe for redeploys)."""
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-
-    columns_to_add = [
-        ("neutral", "TEXT"),
-        ("left", "TEXT"),
-        ("right", "TEXT"),
-        ("credibility", "TEXT"),
-        ("category", "TEXT"),
-        ("image", "TEXT")
-    ]
-
-    for col, col_type in columns_to_add:
-        try:
-            c.execute(f"ALTER TABLE news ADD COLUMN {col} {col_type}")
-            print(f"Added column: {col}")
-        except sqlite3.OperationalError:
-            # Happens if the column already exists
-            pass
-
-    conn.commit()
-    conn.close()
-
-# ------------------ DATA STORAGE ------------------
-
 def save_article(title, detailed, credibility, category, image):
-    """Save an article to the database."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
@@ -71,10 +37,7 @@ def save_article(title, detailed, credibility, category, image):
     conn.commit()
     conn.close()
 
-# ------------------ AI PROCESSING ------------------
-
 def expand_with_ai(title, summary):
-    """Use OpenAI to generate perspectives."""
     prompt = f"""
     Provide:
     1. Neutral factual explanation
@@ -91,14 +54,10 @@ def expand_with_ai(title, summary):
             max_tokens=400
         )
         return resp.choices[0].message["content"].strip()
-    except Exception as e:
-        print(f"AI Error: {e}")
+    except:
         return "AI explanation unavailable."
 
-# ------------------ FETCHING NEWS ------------------
-
 def fetch_and_process_news():
-    """Fetch news from RSS feeds and store with AI expansion."""
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
         "https://www.reutersagency.com/feed/?best-topics=politics"
@@ -108,8 +67,6 @@ def fetch_and_process_news():
         for entry in feed.entries[:3]:
             ai_text = expand_with_ai(entry.title, entry.summary)
             save_article(entry.title, ai_text, "Verified", "Politics", None)
-
-# ------------------ ROUTES ------------------
 
 @app.route("/")
 def index():
@@ -125,11 +82,18 @@ def refresh():
     fetch_and_process_news()
     return redirect("/")
 
-# ------------------ APP START ------------------
-
 if __name__ == "__main__":
-    init_db()        # Create table if not exists
-    migrate_db()     # Ensure all columns exist
-    fetch_and_process_news()  # Initial fetch
-    port = int(os.environ.get("PORT", 5000))  # Render sets PORT automatically
+    init_db()
+
+    # 🆕 Fetch news automatically at startup if DB is empty
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM news")
+    count = c.fetchone()[0]
+    conn.close()
+    if count == 0:
+        print("No articles found — fetching news now...")
+        fetch_and_process_news()
+
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
