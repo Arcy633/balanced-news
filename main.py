@@ -4,19 +4,12 @@ import sqlite3
 import datetime
 import os
 import openai
-import sys
 
 app = Flask(__name__)
-
-# --- API Key check ---
 openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
-    sys.stderr.write("ERROR: OPENAI_API_KEY environment variable not set.\n")
-    sys.exit(1)
-
 DB_FILE = "news.db"
 
-# --- Database setup ---
+# ---------- DATABASE SETUP ----------
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -45,7 +38,7 @@ def save_article(title, detailed, credibility, category, image):
     conn.commit()
     conn.close()
 
-# --- AI Expansion ---
+# ---------- AI EXPANSION ----------
 def expand_with_ai(title, summary):
     prompt = f"""
     Provide:
@@ -63,26 +56,22 @@ def expand_with_ai(title, summary):
             max_tokens=400
         )
         return resp.choices[0].message["content"].strip()
-    except Exception as e:
-        sys.stderr.write(f"OpenAI API Error: {e}\n")
+    except:
         return "AI explanation unavailable."
 
-# --- Fetch News ---
+# ---------- NEWS FETCH ----------
 def fetch_and_process_news():
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
-        "https://feeds.reuters.com/reuters/politicsNews"  # Fixed RSS feed
+        "https://www.reutersagency.com/feed/?best-topics=politics"
     ]
     for url in feeds:
         feed = feedparser.parse(url)
-        if not feed.entries:
-            sys.stderr.write(f"Warning: No entries found for feed {url}\n")
-            continue
         for entry in feed.entries[:3]:
             ai_text = expand_with_ai(entry.title, entry.summary)
             save_article(entry.title, ai_text, "Verified", "Politics", None)
 
-# --- Routes ---
+# ---------- ROUTES ----------
 @app.route("/")
 def index():
     conn = sqlite3.connect(DB_FILE)
@@ -97,9 +86,16 @@ def refresh():
     fetch_and_process_news()
     return redirect("/")
 
-# --- Main Entrypoint ---
-if __name__ == "__main__":
-    init_db()
+# ---------- STARTUP ----------
+# Always create DB when app starts
+init_db()
+
+# Fetch news once when the first request hits
+@app.before_first_request
+def startup():
     fetch_and_process_news()
-    port = int(os.environ.get("PORT", 5000))  # Render sets PORT dynamically
+
+# Local dev run
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
