@@ -1,5 +1,5 @@
-flask
+Flask
 feedparser
-openai
 gunicorn
-
+openai
+apscheduler
