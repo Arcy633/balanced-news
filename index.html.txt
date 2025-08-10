@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Balanced News</title>
+</head>
+<body>
+    <h1>Balanced News</h1>
+    <a href="/refresh">Refresh News</a>
+    <ul>
+        {% for item in news_items %}
+        <li>
+            <h2>{{ item[1] }}</h2>
+            <p>{{ item[2] }}</p>
+            <p><strong>Credibility:</strong> {{ item[3] }}</p>
+            <p><strong>Category:</strong> {{ item[4] }}</p>
+            <p><em>{{ item[5] }}</em></p>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
