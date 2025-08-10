@@ -57,6 +57,18 @@ def expand_with_ai(title, summary):
     except:
         return "AI explanation unavailable."
 
+def extract_image(entry):
+    """Try to pull an image URL from RSS entry."""
+    if "media_content" in entry and len(entry.media_content) > 0:
+        return entry.media_content[0].get("url")
+    if "links" in entry:
+        for link in entry.links:
+            if link.get("type", "").startswith("image/"):
+                return link.get("href")
+    if "media_thumbnail" in entry and len(entry.media_thumbnail) > 0:
+        return entry.media_thumbnail[0].get("url")
+    return None
+
 def fetch_and_process_news():
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
@@ -65,8 +77,9 @@ def fetch_and_process_news():
     for url in feeds:
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
+            image_url = extract_image(entry)
             ai_text = expand_with_ai(entry.title, entry.summary)
-            save_article(entry.title, ai_text, "Verified", "Politics", None)
+            save_article(entry.title, ai_text, "Verified", "Politics", image_url)
 
 @app.route("/")
 def index():
@@ -85,7 +98,7 @@ def refresh():
 if __name__ == "__main__":
     init_db()
 
-    # 🆕 Fetch news automatically at startup if DB is empty
+    # Fetch news automatically if empty DB
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM news")
