@@ -4,6 +4,7 @@ import sqlite3
 import datetime
 import os
 import openai
+import re
 
 app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -56,7 +57,6 @@ def expand_with_ai(title, summary):
         )
         content = resp.choices[0].message["content"].strip()
 
-        # Force consistent split
         neutral, left, right = "", "", ""
         for line in content.split("\n"):
             if line.startswith("NEUTRAL:"):
@@ -70,6 +70,24 @@ def expand_with_ai(title, summary):
     except Exception as e:
         return "Unable to get AI output||| |||"
 
+def extract_image(entry):
+    # Try 'media_content'
+    if "media_content" in entry and entry.media_content:
+        return entry.media_content[0].get("url")
+
+    # Try 'media_thumbnail'
+    if "media_thumbnail" in entry and entry.media_thumbnail:
+        return entry.media_thumbnail[0].get("url")
+
+    # Try to find image in summary/detail HTML
+    if hasattr(entry, "summary"):
+        match = re.search(r'<img[^>]+src="([^"]+)"', entry.summary)
+        if match:
+            return match.group(1)
+
+    # No image found, use placeholder
+    return "https://via.placeholder.com/600x400?text=No+Image"
+
 def fetch_and_process_news():
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
@@ -79,7 +97,8 @@ def fetch_and_process_news():
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
             ai_text = expand_with_ai(entry.title, entry.summary)
-            save_article(entry.title, ai_text, "Verified", "Politics", None)
+            img_url = extract_image(entry)
+            save_article(entry.title, ai_text, "Verified", "Politics", img_url)
 
 @app.route("/")
 def index():
@@ -98,5 +117,5 @@ def refresh():
 if __name__ == "__main__":
     init_db()
     fetch_and_process_news()
-    port = int(os.environ.get("PORT", 5000))  # Render uses dynamic PORT
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
