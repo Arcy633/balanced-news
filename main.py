@@ -16,7 +16,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS news (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
-            summary TEXT,
+            neutral TEXT,
+            left TEXT,
+            right TEXT,
             credibility TEXT,
             category TEXT,
             date_added TEXT,
@@ -26,23 +28,28 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_article(title, detailed, credibility, category, image):
+def save_article(title, neutral, left, right, credibility, category, image):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
-        INSERT INTO news (title, summary, credibility, category, date_added, image)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (title, detailed, credibility, category,
+        INSERT INTO news (title, neutral, left, right, credibility, category, date_added, image)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (title, neutral, left, right, credibility, category,
           datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), image))
     conn.commit()
     conn.close()
 
 def expand_with_ai(title, summary):
     prompt = f"""
-    Provide:
-    1. Neutral factual explanation
-    2. Left-leaning perspective
-    3. Right-leaning perspective
+    Provide three separate sections:
+    Neutral Explanation:
+    [Your neutral factual explanation here]
+
+    Left Perspective:
+    [Your left-leaning perspective here]
+
+    Right Perspective:
+    [Your right-leaning perspective here]
 
     Headline: {title}
     Summary: {summary}
@@ -51,11 +58,32 @@ def expand_with_ai(title, summary):
         resp = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=400
+            max_tokens=500
         )
-        return resp.choices[0].message["content"].strip()
+        text = resp.choices[0].message["content"].strip()
+
+        neutral, left, right = "", "", ""
+        for line in text.split("\n"):
+            if line.lower().startswith("neutral"):
+                current = "neutral"
+                continue
+            elif line.lower().startswith("left"):
+                current = "left"
+                continue
+            elif line.lower().startswith("right"):
+                current = "right"
+                continue
+
+            if current == "neutral":
+                neutral += line + "\n"
+            elif current == "left":
+                left += line + "\n"
+            elif current == "right":
+                right += line + "\n"
+
+        return neutral.strip(), left.strip(), right.strip()
     except:
-        return "AI explanation unavailable."
+        return "Unavailable", "Unavailable", "Unavailable"
 
 def fetch_and_process_news():
     feeds = [
@@ -65,7 +93,6 @@ def fetch_and_process_news():
     for url in feeds:
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
-            # Get image if available
             image_url = None
             if 'media_content' in entry and len(entry.media_content) > 0:
                 image_url = entry.media_content[0]['url']
@@ -75,8 +102,8 @@ def fetch_and_process_news():
                         image_url = link['href']
                         break
 
-            ai_text = expand_with_ai(entry.title, entry.summary)
-            save_article(entry.title, ai_text, "Verified", "Politics", image_url)
+            neutral, left, right = expand_with_ai(entry.title, entry.summary)
+            save_article(entry.title, neutral, left, right, "Verified", "Politics", image_url)
 
 @app.route("/")
 def index():
