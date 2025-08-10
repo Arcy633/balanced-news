@@ -8,47 +8,26 @@
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-        <a class="navbar-brand" href="/">📰 Balanced News</a>
-        <a class="btn btn-outline-light" href="/refresh">Refresh News</a>
-    </div>
-</nav>
-
 <div class="container py-4">
-    <div class="row g-4">
+    <h1 class="mb-4 text-center">📰 Balanced News</h1>
+    <div class="text-center mb-4">
+        <a href="/refresh" class="btn btn-primary">🔄 Refresh News</a>
+    </div>
+    <div class="row">
         {% for item in news_items %}
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <img src="{{ item[6] }}" class="card-img-top" alt="News Image" style="object-fit: cover; height: 200px;">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                {% if item[6] %}
+                    <img src="{{ item[6] }}" class="card-img-top" alt="News image">
+                {% else %}
+                    <img src="https://via.placeholder.com/400x200?text=No+Image" class="card-img-top" alt="No image">
+                {% endif %}
                 <div class="card-body">
                     <h5 class="card-title">{{ item[1] }}</h5>
-
-                    {% set parts = item[2].split('|||') %}
-                    <div class="mb-3">
-                        <div class="card mb-2 border-secondary">
-                            <div class="card-header bg-secondary text-white">Neutral</div>
-                            <div class="card-body">
-                                {{ parts[0] if parts|length > 0 else "" }}
-                            </div>
-                        </div>
-                        <div class="card mb-2 border-primary">
-                            <div class="card-header bg-primary text-white">Left Perspective</div>
-                            <div class="card-body">
-                                {{ parts[1] if parts|length > 1 else "" }}
-                            </div>
-                        </div>
-                        <div class="card mb-2 border-danger">
-                            <div class="card-header bg-danger text-white">Right Perspective</div>
-                            <div class="card-body">
-                                {{ parts[2] if parts|length > 2 else "" }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <span class="badge bg-primary">{{ item[3] }}</span>
-                    <span class="badge bg-secondary">{{ item[4] }}</span>
-                    <p class="text-muted mt-2"><small>{{ item[5] }}</small></p>
+                    <p class="card-text">{{ item[2] }}</p>
+                </div>
+                <div class="card-footer text-muted">
+                    {{ item[4] }} | {{ item[5] }}
                 </div>
             </div>
         </div>
@@ -56,10 +35,5 @@
     </div>
 </div>
 
-<footer class="bg-dark text-light text-center py-3 mt-4">
-    <small>&copy; {{ current_year }} Balanced News</small>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
