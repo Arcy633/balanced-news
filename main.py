@@ -4,6 +4,7 @@ import sqlite3
 import datetime
 import os
 import openai
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -73,6 +74,7 @@ def expand_with_ai(title, summary):
 
 # ---------- News Fetching ----------
 def fetch_and_process_news():
+    print("Fetching latest news...")
     feeds = [
         "https://feeds.bbci.co.uk/news/rss.xml",
         "https://www.reutersagency.com/feed/?best-topics=politics"
@@ -91,6 +93,12 @@ def fetch_and_process_news():
 
             ai_text = expand_with_ai(entry.title, entry.summary)
             save_article(entry.title, ai_text, "Verified", "Politics", image_url)
+    print("News updated.")
+
+# ---------- Scheduler ----------
+scheduler = BackgroundScheduler()
+scheduler.add_job(fetch_and_process_news, "interval", minutes=30)
+scheduler.start()
 
 # ---------- Routes ----------
 @app.route("/")
@@ -110,6 +118,6 @@ def refresh():
 # ---------- Main ----------
 if __name__ == "__main__":
     init_db()
-    fetch_and_process_news()
+    fetch_and_process_news()  # Fetch initial news on startup
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
