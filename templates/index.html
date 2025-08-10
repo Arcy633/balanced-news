@@ -20,9 +20,7 @@
         {% for item in news_items %}
         <div class="col-md-6">
             <div class="card shadow-sm">
-                {% if item[6] %}
                 <img src="{{ item[6] }}" class="card-img-top" alt="News Image" style="object-fit: cover; height: 200px;">
-                {% endif %}
                 <div class="card-body">
                     <h5 class="card-title">{{ item[1] }}</h5>
 
